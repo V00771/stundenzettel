@@ -1,90 +1,173 @@
-:root{
-  color-scheme: dark;
-  --bg:#0a0d0a;
-  --paper:#0f1210;
-  --card:#171d19;
-  --card-hover:#1c2420;
-  --line:#232e26;
-  --line-soft:#2e3d32;
-  --ink:#f2ece0;
-  --ink-soft:#8da08d;
-  --ink-faint:#5a6b5a;
-  --steel:#7ac4a0;
-  --steel-soft:#1a2e26;
-  --stamp:#e07a6a;
-  --mono:'JetBrains Mono',ui-monospace,monospace;
-  --sans:'Inter',-apple-system,sans-serif;
+const DAYS = ["Montag","Dienstag","Mittwoch","Donnerstag","Freitag"];
+const DEFAULTS = [
+  {start:"08:00", end:"17:00", mode:"fix"},
+  {start:"08:00", end:"17:00", mode:"fix"},
+  {start:"08:00", end:"15:00", mode:"fix"},
+  {start:"08:00", end:"17:00", mode:"fix"},
+  {start:"08:00", end:"", mode:"end"}
+];
+const daysEl = document.getElementById('days');
+const targetEl = document.getElementById('target');
+const pauseToggle = document.getElementById('pauseToggle');
+const ARC_LEN = 213;
+
+function getWeekNumber(d){
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(),0,1));
+  return Math.ceil((((date - yearStart) / 86400000) + 1)/7);
 }
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-html{background:var(--bg);}
-body{
-  margin:0;
-  background:radial-gradient(120% 80% at 50% -20%, #1a2620 0%, var(--bg) 60%), var(--bg);
-  color:var(--ink);
-  font-family:var(--sans);
-  padding:18px 16px 40px;
-  min-height:100vh;
-  -webkit-font-smoothing:antialiased;
+
+function build(){
+  document.getElementById('kwNum').textContent = getWeekNumber(new Date());
+  daysEl.innerHTML = "";
+  DAYS.forEach((name,i)=>{
+    const def = DEFAULTS[i];
+    const short = name.slice(0,2).toUpperCase();
+    const div = document.createElement('div');
+    div.className = "day-card";
+    div.innerHTML = `
+      <div class="day-top">
+        <div class="day-name-wrap">
+          <div class="day-name">${name}</div>
+          <span class="badge-active">aktiv berechnet</span>
+        </div>
+        <div class="day-netto zero" id="netto-${i}">–</div>
+      </div>
+      <div class="row-inputs">
+        <div class="field"><label>${short} Start</label><input type="time" id="start-${i}" value="${def.start}"></div>
+        <div class="field"><label>${short} Ende</label><input type="time" id="end-${i}" value="${def.end}"></div>
+        <div class="mode-select">
+          <label>Modus</label>
+          <select id="mode-${i}">
+            <option value="fix">Fix</option>
+            <option value="end">Ende berechnen</option>
+            <option value="start">Start berechnen</option>
+          </select>
+        </div>
+      </div>
+      <div class="meta-line">
+        <span id="raw-${i}">Dauer –</span>
+        <span id="pause-${i}">Pause –</span>
+      </div>
+    `;
+    daysEl.appendChild(div);
+    div.querySelector(`#mode-${i}`).value = def.mode;
+  });
+
+  daysEl.querySelectorAll('input, select').forEach(el=>{
+    el.addEventListener('input', ()=>{
+      if(el.tagName==='SELECT' && el.value!=='fix'){
+        const i = parseInt(el.id.split('-')[1],10);
+        DAYS.forEach((_,j)=>{
+          if(j!==i) document.getElementById(`mode-${j}`).value = 'fix';
+        });
+      }
+      recalc();
+    });
+  });
+  targetEl.addEventListener('input', recalc);
+  pauseToggle.addEventListener('change', recalc);
 }
-.wrap{max-width:560px;margin:0 auto;}
-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;}
-.eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-faint);font-weight:700;margin-bottom:6px;}
-.eyebrow span{color:var(--ink-soft);}
-h1{font-size:28px;font-weight:800;letter-spacing:-.03em;margin:0;color:var(--ink);}
-#resetBtn{font-family:var(--mono);font-size:11px;font-weight:600;background:var(--card);border:1px solid var(--line);color:var(--ink-soft);border-radius:999px;padding:8px 16px;cursor:pointer;transition:.2s;}
-#resetBtn:active{transform:scale(.96);background:var(--line);}
-.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;}
-@media(max-width:480px){.grid-2{grid-template-columns:1fr;}}
-.target-row,.setting-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;transition:border-color.2s, background.2s;}
-.target-row:focus-within{border-color:var(--line-soft);background:var(--card-hover);}
-.target-row.txt b{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink);font-weight:700;}
-.target-row.txt span{font-size:11px;color:var(--ink-soft);}
-.target-row input{width:86px;font-family:var(--mono);font-size:18px;font-weight:700;text-align:center;border:1.5px solid var(--line-soft);border-radius:10px;padding:8px;background:#0c130e;color:var(--ink);}
-.setting-card{cursor:pointer;gap:12px;}
-.setting-text b{display:block;font-size:12px;font-weight:700;letter-spacing:.02em;}
-.setting-text span{display:block;font-size:10.5px;color:var(--ink-soft);margin-top:2px;line-height:1.3;}
-.toggle-wrap{position:relative;width:46px;height:28px;flex-shrink:0;}
-.toggle-wrap input{opacity:0;width:0;height:0;position:absolute;}
-.toggle{position:absolute;inset:0;background:#222e26;border:1px solid var(--line-soft);border-radius:999px;transition:.3s;}
-.toggle::after{content:"";position:absolute;left:3px;top:3px;width:20px;height:20px;background:var(--ink-soft);border-radius:50%;transition:.3s cubic-bezier(.34,1.56,.64,1);}
-input:checked +.toggle{background:var(--steel-soft);border-color:var(--steel);}
-input:checked +.toggle::after{background:var(--steel);transform:translateX(18px);}
-.summary{background:linear-gradient(180deg, #1b2620, #151d19);border:1px solid var(--line);border-radius:20px;padding:18px;margin-bottom:18px;display:flex;align-items:center;gap:16px;overflow:hidden;}
-.gauge-box{flex:0 0 160px;height:110px;position:relative;}
-.gauge-box svg{position:absolute;top:0;left:0;}
-.needle{position:absolute;left:50%;bottom:14px;width:2.5px;height:62px;background:linear-gradient(to top, var(--ink-faint), var(--ink));border-radius:2px;transform-origin:bottom center;transform:translateX(-50%) rotate(-90deg);transition:transform.6s cubic-bezier(.34,1.4,.64,1);}
-.needle::after{content:"";position:absolute;left:50%;bottom:-5px;width:10px;height:10px;background:var(--ink);border-radius:50%;transform:translateX(-50%);box-shadow:0 0 0 4px rgba(242,236,224,.12);}
-.gauge-readout{position:absolute;left:0;right:0;bottom:4px;text-align:center;}
-.gauge-readout.val{font-family:var(--mono);font-size:20px;font-weight:800;letter-spacing:-.02em;}
-.gauge-readout.lbl{font-size:8px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-soft);margin-top:2px;}
-.summary-info{flex:1;min-width:0;}
-.summary-info.row{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11.5px;color:var(--ink-soft);margin-bottom:8px;}
-.summary-info.row span:last-child{color:var(--ink);font-weight:700;}
-.diff-wrap{margin-top:10px;}
-.stamp{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.04em;display:inline-flex;padding:6px 12px;border-radius:999px;border:1px solid currentColor;}
-.stamp.ok{background:rgba(122,196,160,.15);color:#7ac4a0;border-color:rgba(122,196,160,.3);}
-.stamp.over{background:rgba(224,122,106,.12);color:#e08f85;border-color:rgba(224,122,106,.25);}
-.stamp.under{background:rgba(224,184,119,.12);color:#e0b877;border-color:rgba(224,184,119,.25);}
-.progress-track{height:4px;background:rgba(255,255,255,.06);border-radius:999px;margin-top:12px;overflow:hidden;}
-.progress-fill{height:100%;width:0%;background:var(--steel);border-radius:999px;transition:width.6s ease, background.3s;}
-.day-card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:10px;transition:.2s;}
-.day-card:active{transform:scale(.99);}
-.day-card.computed{border-color:rgba(122,196,160,.4);background:linear-gradient(180deg, #1d2a23, #171d19);box-shadow:0 0 0 1px rgba(122,196,160,.15), 0 8px 24px rgba(0,0,0,.3);}
-.day-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
-.day-name-wrap{display:flex;align-items:center;gap:10px;}
-.day-name{font-weight:800;font-size:15px;letter-spacing:-.01em;}
-.badge-active{font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;background:var(--steel-soft);color:var(--steel);border:1px solid rgba(122,196,160,.25);padding:3px 8px;border-radius:999px;opacity:0;transition:.2s;}
-.day-card.computed.badge-active{opacity:1;}
-.day-netto{font-family:var(--mono);font-size:15px;font-weight:800;}
-.day-netto.zero{color:var(--ink-faint);font-weight:500;}
-.row-inputs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
-@media(max-width:480px){.row-inputs{grid-template-columns:1fr 1fr;}.row-inputs.mode-select{grid-column:1 / -1;}}
-.field label,.mode-select label{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);font-weight:700;margin-bottom:6px;display:block;}
-.field input[type=time],.mode-select select{width:100%;height:42px;font-family:var(--mono);font-size:15px;font-weight:600;border:1px solid var(--line-soft);border-radius:12px;padding:0 12px;background:#0c130e;color:var(--ink);color-scheme:dark;transition:.15s;}
-.field input:focus,.mode-select select:focus{outline:none;border-color:var(--steel);box-shadow:0 0 0 3px rgba(122,196,160,.15);}
-.field input[disabled]{opacity:.6;background:var(--steel-soft);border-color:rgba(122,196,160,.3);font-weight:800;color:var(--steel);}
-.mode-select select{appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path d='M1 1l5 5 5-5' stroke='%238da08d' stroke-width='1.5' fill='none' stroke-linecap='round'/></svg>");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px;}
-.meta-line{display:flex;gap:14px;margin-top:12px;padding-top:12px;border-top:1px dashed var(--line);font-family:var(--mono);font-size:11px;color:var(--ink-faint);}
-.note{display:flex;gap:10px;font-size:11.5px;line-height:1.5;color:var(--ink-soft);background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:20px;}
-.note.dot{width:6px;height:6px;background:var(--steel);border-radius:50%;margin-top:6px;flex-shrink:0;box-shadow:0 0 8px var(--steel);}
-.note b{color:var(--ink);}
+
+function toMin(str){ if(!str) return null; const [h,m] = str.split(':').map(Number); return h*60+m; }
+function toTime(min){ min=Math.round(min); min=((min%1440)+1440)%1440; const h=Math.floor(min/60); const m=min%60; return String(h).padStart(2,'0')+":"+String(m).padStart(2,'0'); }
+function fmtH(min){ const sign=min<0?"-":""; min=Math.abs(Math.round(min)); const h=Math.floor(min/60); const m=min%60; return `${sign}${h}h ${String(m).padStart(2,'0')}min`; }
+function pauseFor(rawMin){ if(!pauseToggle.checked) return 0; return rawMin>360? 30 : 0; }
+
+function recalc(){
+  const targetMin = Math.round(parseFloat(targetEl.value||"0")*60);
+  const computeIdx = DAYS.findIndex((_,i)=>document.getElementById(`mode-${i}`).value!== 'fix');
+  const pauseEnabled = pauseToggle.checked;
+
+  document.getElementById('pauseLabel').textContent = pauseEnabled? "30 Min. ab >6h abziehen" : "Keine Pause";
+  document.getElementById('noteTitle').textContent = pauseEnabled? "Pause aktiv:" : "Pause aus:";
+  document.getElementById('noteText').textContent = pauseEnabled? "Bei mehr als 6h werden automatisch 30 Min. abgezogen." : "Pausen werden nicht abgezogen. Zeiten werden 1:1 gerechnet.";
+
+  let fixedSum = 0;
+  const nettoByDay = new Array(5).fill(0);
+  for(let i=0;i<5;i++){
+    if(i===computeIdx) continue;
+    const s = toMin(document.getElementById(`start-${i}`).value);
+    const e = toMin(document.getElementById(`end-${i}`).value);
+    if(s===null || e<=s){ nettoByDay[i]=0; continue; }
+    const raw = e-s; const pause = pauseFor(raw); nettoByDay[i] = raw-pause; fixedSum += raw-pause;
+  }
+
+  let computeError = null;
+  if(computeIdx>-1){
+    const mode = document.getElementById(`mode-${computeIdx}`).value;
+    const neededNetto = targetMin - fixedSum;
+    const startInput = document.getElementById(`start-${computeIdx}`);
+    const endInput = document.getElementById(`end-${computeIdx}`);
+    if(neededNetto < 0){ computeError = "Ziel überschritten"; nettoByDay[computeIdx] = 0; }
+    else {
+      let raw = neededNetto + (pauseEnabled? 30 : 0);
+      if(pauseEnabled && raw <= 360) raw = neededNetto;
+      if(!pauseEnabled) raw = neededNetto;
+      nettoByDay[computeIdx] = raw - pauseFor(raw);
+      if(mode==='end'){ const s = toMin(startInput.value); if(s!==null){ endInput.value = toTime(s+raw); } else { computeError = "Start fehlt"; } }
+      else if(mode==='start'){ const e = toMin(endInput.value); if(e!==null){ startInput.value = toTime(e-raw); } else { computeError = "Ende fehlt"; } }
+    }
+  }
+
+  for(let i=0;i<5;i++){
+    const card = daysEl.children[i];
+    const isComputed = i===computeIdx;
+    card.classList.toggle('computed', isComputed);
+    document.getElementById(`start-${i}`).disabled = isComputed && document.getElementById(`mode-${i}`).value==='start';
+    document.getElementById(`end-${i}`).disabled = isComputed && document.getElementById(`mode-${i}`).value==='end';
+    const s = toMin(document.getElementById(`start-${i}`).value);
+    const e = toMin(document.getElementById(`end-${i}`).value);
+    const nettoEl = document.getElementById(`netto-${i}`);
+    const rawEl = document.getElementById(`raw-${i}`);
+    const pauseEl = document.getElementById(`pause-${i}`);
+    if(isComputed && computeError){ nettoEl.textContent = computeError; nettoEl.classList.add('zero'); rawEl.textContent = "Dauer –"; pauseEl.textContent = pauseEnabled? "Pause –" : "Pause aus"; continue; }
+    if(s===null || e===null || e<=s){ nettoEl.textContent = "–"; nettoEl.classList.add('zero'); rawEl.textContent = "Dauer –"; pauseEl.textContent = pauseEnabled? "Pause –" : "Pause aus"; continue; }
+    const raw = e-s; const pause = pauseFor(raw); const netto = raw-pause;
+    nettoEl.textContent = fmtH(netto); nettoEl.classList.remove('zero');
+    rawEl.textContent = "Dauer "+fmtH(raw);
+    pauseEl.textContent = pause>0? "Pause 30min" : (pauseEnabled? "Pause –" : "Pause aus");
+  }
+
+  const totalNetto = nettoByDay.reduce((a,b)=>a+b,0);
+  document.getElementById('sumTarget').textContent = fmtH(targetMin);
+  document.getElementById('sumTotal').textContent = fmtH(totalNetto);
+  document.getElementById('ringVal').textContent = Math.floor(totalNetto/60)+"h"+String(totalNetto%60).padStart(2,'0');
+  const pct = targetMin>0? Math.max(0,Math.min(1,totalNetto/targetMin)) : 0;
+  document.getElementById('gaugeArc').setAttribute('stroke-dashoffset', ARC_LEN*(1-pct));
+  document.getElementById('needle').style.transform = `translateX(-50%) rotate(${pct*180-90}deg)`;
+  document.getElementById('progressFill').style.width = (pct*100)+"%";
+  const diff = totalNetto - targetMin;
+  const diffTag = document.getElementById('diffTag');
+  const gaugeArc = document.getElementById('gaugeArc');
+  const progressFill = document.getElementById('progressFill');
+  if(Math.abs(diff) < 1){ diffTag.textContent = "exakt am Ziel ✓"; diffTag.className = "stamp ok"; gaugeArc.setAttribute('stroke','#7ac4a0'); progressFill.style.background = '#7ac4a0'; }
+  else if(diff>0){ diffTag.textContent = "+"+fmtH(diff)+" zu viel"; diffTag.className = "stamp over"; gaugeArc.setAttribute('stroke','#e08f85'); progressFill.style.background = '#e08f85'; }
+  else { diffTag.textContent = fmtH(diff)+" zu wenig"; diffTag.className = "stamp under"; gaugeArc.setAttribute('stroke','#e0b877'); progressFill.style.background = '#e0b877'; }
+}
+
+function saveState(){
+  const state = {target: targetEl.value, pause: pauseToggle.checked, days: []};
+  for(let i=0;i<5;i++){ state.days.push({start: document.getElementById(`start-${i}`).value, end: document.getElementById(`end-${i}`).value, mode: document.getElementById(`mode-${i}`).value}); }
+  try{ localStorage.setItem('stundenzettel-state-v2', JSON.stringify(state)); }catch(e){}
+}
+function loadState(){
+  try{
+    const raw = localStorage.getItem('stundenzettel-state-v2') || localStorage.getItem('stundenzettel-state');
+    if(!raw) return false; const state = JSON.parse(raw);
+    targetEl.value = state.target || "38.5";
+    if(typeof state.pause === 'boolean') pauseToggle.checked = state.pause;
+    if(state.days){ state.days.forEach((d,i)=>{ if(document.getElementById(`start-${i}`)){ document.getElementById(`start-${i}`).value = d.start; document.getElementById(`end-${i}`).value = d.end; document.getElementById(`mode-${i}`).value = d.mode; } }); }
+    return true;
+  }catch(e){ return false; }
+}
+
+build(); loadState(); recalc();
+document.addEventListener('input', ()=>{ recalc(); saveState(); });
+document.addEventListener('change', ()=>{ recalc(); saveState(); });
+document.getElementById('resetBtn').addEventListener('click', ()=>{
+  try{ localStorage.removeItem('stundenzettel-state-v2'); localStorage.removeItem('stundenzettel-state'); }catch(e){}
+  location.reload();
+});
