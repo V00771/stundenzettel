@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Stundenzettel</title>
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#121410">
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+<header><div><div class="eyebrow">Zeiterfassung</div><h1>Wochenkarte</h1></div><div class="kw-badge">KW<b id="kwNum">–</b><button id="resetBtn" type="button">Zurücksetzen</button></div></header>
+<div class="target-row"><div class="txt"><b>Sollstunden</b>Ziel für diese Woche</div><input type="number" id="target" step="0.01" value="38.5"></div>
+<div class="summary"><div class="gauge-box"><svg width="138" height="92" viewBox="0 0 138 92"><path d="M9,80 A60,60 0 0 1 129,80" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="9" stroke-linecap="round"/><path id="gaugeArc" d="M9,80 A60,60 0 0 1 129,80" fill="none" stroke="#5a9ab5" stroke-width="9" stroke-linecap="round" stroke-dasharray="188.5" stroke-dashoffset="188.5"/></svg><div class="needle" id="needle"></div><div class="gauge-readout"><div class="val" id="ringVal">0h00</div><div class="lbl">Netto</div></div></div><div class="summary-info"><div class="row"><span>Ziel</span><span id="sumTarget">–</span></div><div class="row"><span>Erfasst</span><span id="sumTotal">–</span></div><span class="stamp ok" id="diffTag">–</span></div></div>
+<div id="days"></div>
+<div class="note">Pause: automatisch <b>30 Min.</b> abgezogen, sobald mehr als 6 Std. gearbeitet wird.</div>
+</div>
+<script src="script.js"></script>
+</body>
+</html>
