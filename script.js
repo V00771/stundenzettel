@@ -1,191 +1,90 @@
-const DAYS = [
-  { id:'mo', label:'Montag', short:'Mo' },
-  { id:'di', label:'Dienstag', short:'Di' },
-  { id:'mi', label:'Mittwoch', short:'Mi' },
-  { id:'do', label:'Donnerstag', short:'Do' },
-  { id:'fr', label:'Freitag', short:'Fr' },
-  { id:'sa', label:'Samstag', short:'Sa' },
-  { id:'so', label:'Sonntag', short:'So' },
-];
-const DEFAULTS = {
-  mo:{ start:'08:00', end:'16:30', on:true },
-  di:{ start:'08:00', end:'16:30', on:true },
-  mi:{ start:'08:00', end:'16:30', on:true },
-  do:{ start:'08:00', end:'16:30', on:true },
-  fr:{ start:'08:00', end:'15:00', on:true },
-  sa:{ start:'', end:'', on:false },
-  so:{ start:'', end:'', on:false },
-};
-
-const els = {};
-function $(id){ return document.getElementById(id); }
-
-function toMin(t){
-  if(!t || !t.includes(':')) return NaN;
-  const [h,m] = t.split(':').map(Number);
-  if(Number.isNaN(h)||Number.isNaN(m)) return NaN;
-  return h*60+m;
+:root{
+  color-scheme: dark;
+  --bg:#0a0d0a;
+  --paper:#0f1210;
+  --card:#171d19;
+  --card-hover:#1c2420;
+  --line:#232e26;
+  --line-soft:#2e3d32;
+  --ink:#f2ece0;
+  --ink-soft:#8da08d;
+  --ink-faint:#5a6b5a;
+  --steel:#7ac4a0;
+  --steel-soft:#1a2e26;
+  --stamp:#e07a6a;
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+  --sans:'Inter',-apple-system,sans-serif;
 }
-function toTime(min){
-  const h = Math.floor(min/60);
-  const m = min%60;
-  return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html{background:var(--bg);}
+body{
+  margin:0;
+  background:radial-gradient(120% 80% at 50% -20%, #1a2620 0%, var(--bg) 60%), var(--bg);
+  color:var(--ink);
+  font-family:var(--sans);
+  padding:18px 16px 40px;
+  min-height:100vh;
+  -webkit-font-smoothing:antialiased;
 }
-function fmtH(min){
-  if(min<=0||Number.isNaN(min)) return '0h00';
-  const h = Math.floor(min/60);
-  const m = min%60;
-  return h+'h'+String(m).padStart(2,'0');
-}
-function pauseFor(total){
-  return total > 360 ? 30 : 0;
-}
-function weekNumber(d=new Date()){
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const dayNum = date.getUTCDay()||7;
-  date.setUTCDate(date.getUTCDate()+4-dayNum);
-  const yearStart = new Date(Date.UTC(date.getUTCFullYear(),0,1));
-  return Math.ceil((((date - yearStart)/86400000)+1)/7);
-}
-function build(){
-  els.days = $('days');
-  els.target = $('target');
-  els.kwNum = $('kwNum');
-  els.ringVal = $('ringVal');
-  els.sumTarget = $('sumTarget');
-  els.sumTotal = $('sumTotal');
-  els.diffTag = $('diffTag');
-  els.gaugeArc = $('gaugeArc');
-  els.needle = $('needle');
-  els.resetBtn = $('resetBtn');
-
-  els.kwNum.textContent = weekNumber();
-
-  const frag = document.createDocumentFragment();
-  DAYS.forEach(d=>{
-    const row = document.createElement('div');
-    row.className='day';
-    row.dataset.id=d.id;
-    row.innerHTML = `
-      <div class="dow"><span>${d.short}</span><b>${d.label.slice(0,2)}</b></div>
-      <div class="inputs">
-        <input type="time" data-k="start" aria-label="Start ${d.label}">
-        <span class="dash">—</span>
-        <input type="time" data-k="end" aria-label="Ende ${d.label}">
-        <label class="check"><input type="checkbox" data-k="on"> aktiv</label>
-      </div>
-      <div class="meta"><div class="net" data-k="net">–</div><div class="sub" data-k="sub">–</div></div>
-    `;
-    frag.appendChild(row);
-  });
-  els.days.appendChild(frag);
-
-  els.days.addEventListener('input', e=>{
-    if(e.target.matches('input')) recalc();
-  });
-  els.days.addEventListener('change', e=>{
-    if(e.target.matches('input')) recalc();
-  });
-  els.target.addEventListener('input', recalc);
-  els.resetBtn.addEventListener('click', ()=>{
-    localStorage.removeItem('wochenkarte:v2');
-    loadState(true);
-    recalc();
-  });
-
-  loadState();
-  recalc();
-}
-
-function getDayState(id){
-  const row = document.querySelector(`.day[data-id="${id}"]`);
-  const start = row.querySelector('[data-k="start"]').value;
-  const end = row.querySelector('[data-k="end"]').value;
-  const on = row.querySelector('[data-k="on"]').checked;
-  return { start, end, on };
-}
-function setDayState(id, s){
-  const row = document.querySelector(`.day[data-id="${id}"]`);
-  row.querySelector('[data-k="start"]').value = s.start||'';
-  row.querySelector('[data-k="end"]').value = s.end||'';
-  row.querySelector('[data-k="on"]').checked = !!s.on;
-  row.classList.toggle('is-off', !s.on);
-}
-
-function recalc(){
-  let totalNet = 0;
-  let activeDays = 0;
-  DAYS.forEach(d=>{
-    const row = document.querySelector(`.day[data-id="${d.id}"]`);
-    const { start, end, on } = getDayState(d.id);
-    row.classList.toggle('is-off', !on);
-    const netEl = row.querySelector('[data-k="net"]');
-    const subEl = row.querySelector('[data-k="sub"]');
-    if(!on || !start || !end){
-      netEl.textContent = '–';
-      subEl.textContent = on ? 'keine Zeit' : 'frei';
-      return;
-    }
-    const s = toMin(start), e = toMin(end);
-    if(Number.isNaN(s)||Number.isNaN(e)||e<=s){
-      netEl.textContent = '–';
-      subEl.textContent = 'ungültig';
-      return;
-    }
-    const brutto = e - s;
-    const pause = pauseFor(brutto);
-    const netto = brutto - pause;
-    totalNet += netto;
-    activeDays++;
-    netEl.textContent = fmtH(netto);
-    subEl.textContent = brutto>360 ? `inkl. ${pause}m Pause` : `${brutto}m brutto`;
-  });
-
-  const targetH = parseFloat(els.target.value)||0;
-  const targetM = Math.round(targetH*60);
-  els.sumTarget.textContent = fmtH(targetM);
-  els.sumTotal.textContent = fmtH(totalNet);
-  els.ringVal.textContent = fmtH(totalNet);
-
-  const diff = totalNet - targetM;
-  const pct = targetM>0 ? totalNet/targetM : 0;
-  const clamped = Math.max(0, Math.min(1.2, pct));
-  const dash = 188.5;
-  const offset = dash - (Math.min(clamped,1)*dash);
-  els.gaugeArc.style.strokeDashoffset = String(offset);
-  els.needle.style.transform = `translateX(-50%) rotate(${-90 + clamped*180}deg)`;
-  els.gaugeArc.setAttribute('stroke', pct>=1 ? 'var(--ok)' : pct>=0.6 ? 'var(--accent)' : 'var(--ink-faint)');
-
-  let tagText = '';
-  let tagClass = 'stamp ';
-  if(diff===0) { tagText = 'exakt am Ziel'; tagClass+='ok'; }
-  else if(diff>0){ tagText = '+' + fmtH(diff)+' über Ziel'; tagClass+= diff>60 ? 'ok':'mid'; }
-  else { tagText = fmtH(Math.abs(diff))+' unter Ziel'; tagClass+= Math.abs(diff)<60 ? 'mid':'low'; }
-  els.diffTag.textContent = tagText;
-  els.diffTag.className = tagClass;
-
-  saveState();
-}
-
-function saveState(){
-  const data = {
-    target: els.target.value,
-    days: {}
-  };
-  DAYS.forEach(d=> data.days[d.id]=getDayState(d.id));
-  localStorage.setItem('wochenkarte:v2', JSON.stringify(data));
-}
-function loadState(reset=false){
-  let raw = null;
-  if(!reset){
-    try{ raw = JSON.parse(localStorage.getItem('wochenkarte:v2')||''); }catch{ raw=null; }
-  }
-  const src = raw || { target:'38.5', days: DEFAULTS };
-  els.target.value = src.target ?? '38.5';
-  DAYS.forEach(d=>{
-    const st = (src.days && src.days[d.id]) || DEFAULTS[d.id];
-    setDayState(d.id, st);
-  });
-}
-
-document.addEventListener('DOMContentLoaded', build);
+.wrap{max-width:560px;margin:0 auto;}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;}
+.eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-faint);font-weight:700;margin-bottom:6px;}
+.eyebrow span{color:var(--ink-soft);}
+h1{font-size:28px;font-weight:800;letter-spacing:-.03em;margin:0;color:var(--ink);}
+#resetBtn{font-family:var(--mono);font-size:11px;font-weight:600;background:var(--card);border:1px solid var(--line);color:var(--ink-soft);border-radius:999px;padding:8px 16px;cursor:pointer;transition:.2s;}
+#resetBtn:active{transform:scale(.96);background:var(--line);}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;}
+@media(max-width:480px){.grid-2{grid-template-columns:1fr;}}
+.target-row,.setting-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;transition:border-color.2s, background.2s;}
+.target-row:focus-within{border-color:var(--line-soft);background:var(--card-hover);}
+.target-row.txt b{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink);font-weight:700;}
+.target-row.txt span{font-size:11px;color:var(--ink-soft);}
+.target-row input{width:86px;font-family:var(--mono);font-size:18px;font-weight:700;text-align:center;border:1.5px solid var(--line-soft);border-radius:10px;padding:8px;background:#0c130e;color:var(--ink);}
+.setting-card{cursor:pointer;gap:12px;}
+.setting-text b{display:block;font-size:12px;font-weight:700;letter-spacing:.02em;}
+.setting-text span{display:block;font-size:10.5px;color:var(--ink-soft);margin-top:2px;line-height:1.3;}
+.toggle-wrap{position:relative;width:46px;height:28px;flex-shrink:0;}
+.toggle-wrap input{opacity:0;width:0;height:0;position:absolute;}
+.toggle{position:absolute;inset:0;background:#222e26;border:1px solid var(--line-soft);border-radius:999px;transition:.3s;}
+.toggle::after{content:"";position:absolute;left:3px;top:3px;width:20px;height:20px;background:var(--ink-soft);border-radius:50%;transition:.3s cubic-bezier(.34,1.56,.64,1);}
+input:checked +.toggle{background:var(--steel-soft);border-color:var(--steel);}
+input:checked +.toggle::after{background:var(--steel);transform:translateX(18px);}
+.summary{background:linear-gradient(180deg, #1b2620, #151d19);border:1px solid var(--line);border-radius:20px;padding:18px;margin-bottom:18px;display:flex;align-items:center;gap:16px;overflow:hidden;}
+.gauge-box{flex:0 0 160px;height:110px;position:relative;}
+.gauge-box svg{position:absolute;top:0;left:0;}
+.needle{position:absolute;left:50%;bottom:14px;width:2.5px;height:62px;background:linear-gradient(to top, var(--ink-faint), var(--ink));border-radius:2px;transform-origin:bottom center;transform:translateX(-50%) rotate(-90deg);transition:transform.6s cubic-bezier(.34,1.4,.64,1);}
+.needle::after{content:"";position:absolute;left:50%;bottom:-5px;width:10px;height:10px;background:var(--ink);border-radius:50%;transform:translateX(-50%);box-shadow:0 0 0 4px rgba(242,236,224,.12);}
+.gauge-readout{position:absolute;left:0;right:0;bottom:4px;text-align:center;}
+.gauge-readout.val{font-family:var(--mono);font-size:20px;font-weight:800;letter-spacing:-.02em;}
+.gauge-readout.lbl{font-size:8px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-soft);margin-top:2px;}
+.summary-info{flex:1;min-width:0;}
+.summary-info.row{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11.5px;color:var(--ink-soft);margin-bottom:8px;}
+.summary-info.row span:last-child{color:var(--ink);font-weight:700;}
+.diff-wrap{margin-top:10px;}
+.stamp{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.04em;display:inline-flex;padding:6px 12px;border-radius:999px;border:1px solid currentColor;}
+.stamp.ok{background:rgba(122,196,160,.15);color:#7ac4a0;border-color:rgba(122,196,160,.3);}
+.stamp.over{background:rgba(224,122,106,.12);color:#e08f85;border-color:rgba(224,122,106,.25);}
+.stamp.under{background:rgba(224,184,119,.12);color:#e0b877;border-color:rgba(224,184,119,.25);}
+.progress-track{height:4px;background:rgba(255,255,255,.06);border-radius:999px;margin-top:12px;overflow:hidden;}
+.progress-fill{height:100%;width:0%;background:var(--steel);border-radius:999px;transition:width.6s ease, background.3s;}
+.day-card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:10px;transition:.2s;}
+.day-card:active{transform:scale(.99);}
+.day-card.computed{border-color:rgba(122,196,160,.4);background:linear-gradient(180deg, #1d2a23, #171d19);box-shadow:0 0 0 1px rgba(122,196,160,.15), 0 8px 24px rgba(0,0,0,.3);}
+.day-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
+.day-name-wrap{display:flex;align-items:center;gap:10px;}
+.day-name{font-weight:800;font-size:15px;letter-spacing:-.01em;}
+.badge-active{font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;background:var(--steel-soft);color:var(--steel);border:1px solid rgba(122,196,160,.25);padding:3px 8px;border-radius:999px;opacity:0;transition:.2s;}
+.day-card.computed.badge-active{opacity:1;}
+.day-netto{font-family:var(--mono);font-size:15px;font-weight:800;}
+.day-netto.zero{color:var(--ink-faint);font-weight:500;}
+.row-inputs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+@media(max-width:480px){.row-inputs{grid-template-columns:1fr 1fr;}.row-inputs.mode-select{grid-column:1 / -1;}}
+.field label,.mode-select label{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);font-weight:700;margin-bottom:6px;display:block;}
+.field input[type=time],.mode-select select{width:100%;height:42px;font-family:var(--mono);font-size:15px;font-weight:600;border:1px solid var(--line-soft);border-radius:12px;padding:0 12px;background:#0c130e;color:var(--ink);color-scheme:dark;transition:.15s;}
+.field input:focus,.mode-select select:focus{outline:none;border-color:var(--steel);box-shadow:0 0 0 3px rgba(122,196,160,.15);}
+.field input[disabled]{opacity:.6;background:var(--steel-soft);border-color:rgba(122,196,160,.3);font-weight:800;color:var(--steel);}
+.mode-select select{appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path d='M1 1l5 5 5-5' stroke='%238da08d' stroke-width='1.5' fill='none' stroke-linecap='round'/></svg>");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px;}
+.meta-line{display:flex;gap:14px;margin-top:12px;padding-top:12px;border-top:1px dashed var(--line);font-family:var(--mono);font-size:11px;color:var(--ink-faint);}
+.note{display:flex;gap:10px;font-size:11.5px;line-height:1.5;color:var(--ink-soft);background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:20px;}
+.note.dot{width:6px;height:6px;background:var(--steel);border-radius:50%;margin-top:6px;flex-shrink:0;box-shadow:0 0 8px var(--steel);}
+.note b{color:var(--ink);}
